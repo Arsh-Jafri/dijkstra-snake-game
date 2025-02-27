@@ -4,10 +4,11 @@ import java.awt.event.*;
 import java.util.*;
 
 public class GamePanel extends JPanel implements ActionListener, KeyListener {
-    private static final int CELL_SIZE = 20;
-    private static final int GRID_WIDTH = 40;
-    private static final int GRID_HEIGHT = 30;
-    private static final int GAME_SPEED = 100; // Milliseconds between updates
+    private static final int CELL_SIZE = 25;
+    private static final int GRID_WIDTH = 30;
+    private static final int GRID_HEIGHT = 20;
+    private static final int INITIAL_SNAKE_LENGTH = 4;
+    private static final int CONTROL_PANEL_HEIGHT = 50;
     
     private Snake playerSnake;
     private Snake aiSnake;
@@ -19,19 +20,46 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     private JPanel controlPanel;
     private JButton restartButton;
     private JButton pauseResumeButton;
+    private GameAreaPanel gameArea;
+    private Color playerColor;
+    private Color aiColor;
     
-    public GamePanel() {
-        setLayout(new BorderLayout());
+    private class GameAreaPanel extends JPanel {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            drawGame(g);
+        }
+        
+        @Override
+        public Dimension getPreferredSize() {
+            return new Dimension(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE);
+        }
+        
+        @Override
+        public Dimension getMinimumSize() {
+            return getPreferredSize();
+        }
+        
+        @Override
+        public Dimension getMaximumSize() {
+            return getPreferredSize();
+        }
+    }
+    
+    public GamePanel(Color playerColor, Color aiColor, int gameSpeed) {
+        this.playerColor = playerColor;
+        this.aiColor = aiColor;
+        
+        setLayout(new BorderLayout(0, 10));
+        
+        // Initialize variables
+        random = new Random();
+        gameOver = false;
+        gamePaused = false;
         
         // Create game area panel
-        JPanel gameArea = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                drawGame(g);
-            }
-        };
-        gameArea.setPreferredSize(new Dimension(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE));
+        gameArea = new GameAreaPanel();
         gameArea.setBackground(Color.BLACK);
         gameArea.setFocusable(true);
         gameArea.addKeyListener(this);
@@ -39,41 +67,84 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         // Create control panel
         controlPanel = new JPanel();
         controlPanel.setBackground(Color.DARK_GRAY);
+        controlPanel.setPreferredSize(new Dimension(GRID_WIDTH * CELL_SIZE, CONTROL_PANEL_HEIGHT));
         
         restartButton = new JButton("Restart");
         pauseResumeButton = new JButton("Pause");
         
-        restartButton.addActionListener(e -> restartGame());
-        pauseResumeButton.addActionListener(e -> togglePause());
+        Dimension buttonSize = new Dimension(100, 30);
+        restartButton.setPreferredSize(buttonSize);
+        pauseResumeButton.setPreferredSize(buttonSize);
         
+        restartButton.addActionListener(e -> {
+            restartGame();
+            gameArea.requestFocusInWindow();
+        });
+        
+        pauseResumeButton.addActionListener(e -> {
+            togglePause();
+            gameArea.requestFocusInWindow();
+        });
+        
+        controlPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
+        controlPanel.add(Box.createHorizontalStrut(20));
         controlPanel.add(restartButton);
+        controlPanel.add(Box.createHorizontalStrut(20));
         controlPanel.add(pauseResumeButton);
         
-        // Add components to panel
-        add(gameArea, BorderLayout.CENTER);
+        JPanel wrapperPanel = new JPanel(new GridBagLayout());
+        wrapperPanel.setBackground(Color.BLACK);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.CENTER;
+        wrapperPanel.add(gameArea, gbc);
+        
+        add(wrapperPanel, BorderLayout.CENTER);
         add(controlPanel, BorderLayout.SOUTH);
         
-        random = new Random();
-        initializeGame();
+        timer = new javax.swing.Timer(gameSpeed, e -> {
+            update();
+            gameArea.repaint();
+        });
         
-        timer = new javax.swing.Timer(GAME_SPEED, this);
+        initializeSnakes();
+        spawnFood();
+        
         timer.start();
+        
+        SwingUtilities.invokeLater(() -> gameArea.requestFocusInWindow());
+    }
+    
+    private void initializeSnakes() {
+        playerSnake = new Snake(5, GRID_HEIGHT / 2, false);
+        for (int i = 0; i < INITIAL_SNAKE_LENGTH - 1; i++) {
+            playerSnake.grow();
+        }
+        
+        aiSnake = new Snake(GRID_WIDTH - 5, GRID_HEIGHT / 2, true);
+        for (int i = 0; i < INITIAL_SNAKE_LENGTH - 1; i++) {
+            aiSnake.grow();
+        }
     }
     
     private void initializeGame() {
-        playerSnake = new Snake(5, GRID_HEIGHT / 2, false);
-        aiSnake = new Snake(GRID_WIDTH - 5, GRID_HEIGHT / 2, true);
+        initializeSnakes();
         spawnFood();
         gameOver = false;
         gamePaused = false;
         pauseResumeButton.setText("Pause");
-        timer.start();
-        requestFocusInWindow();
+        if (!timer.isRunning()) {
+            timer.start();
+        }
+        gameArea.requestFocusInWindow();
     }
     
     private void restartGame() {
         initializeGame();
-        repaint();
+        gameArea.repaint();
     }
     
     private void togglePause() {
@@ -85,11 +156,44 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
             timer.start();
             pauseResumeButton.setText("Pause");
         }
-        requestFocusInWindow();
+        gameArea.requestFocusInWindow();
+    }
+    
+    private void update() {
+        if (!gameOver && !gamePaused) {
+            Queue<Point> aiPath = findPathToFood(aiSnake);
+            aiSnake.setPathToFood(aiPath);
+            
+            playerSnake.move();
+            aiSnake.move();
+            
+            Point playerHead = playerSnake.getHead();
+            Point aiHead = aiSnake.getHead();
+            
+            if (playerHead.x < 0 || playerHead.x >= GRID_WIDTH || 
+                playerHead.y < 0 || playerHead.y >= GRID_HEIGHT) {
+                gameOver = true;
+            }
+            
+            if (playerSnake.collidesWithSelf() || 
+                aiSnake.collidesWith(playerHead) ||
+                playerSnake.collidesWith(aiHead)) {
+                gameOver = true;
+            }
+            
+            if (playerHead.equals(food) || aiHead.equals(food)) {
+                if (playerHead.equals(food)) {
+                    playerSnake.grow();
+                }
+                if (aiHead.equals(food)) {
+                    aiSnake.grow();
+                }
+                spawnFood();
+            }
+        }
     }
     
     private void drawGame(Graphics g) {
-        // Draw grid (optional)
         g.setColor(Color.DARK_GRAY);
         for (int i = 0; i < GRID_WIDTH; i++) {
             for (int j = 0; j < GRID_HEIGHT; j++) {
@@ -97,18 +201,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
             }
         }
         
-        // Draw food
         g.setColor(Color.RED);
         g.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         
-        // Draw player snake
-        g.setColor(Color.GREEN);
+        g.setColor(playerColor);
         for (Point p : playerSnake.getBody()) {
             g.fillRect(p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         }
         
-        // Draw AI snake
-        g.setColor(Color.BLUE);
+        g.setColor(aiColor);
         for (Point p : aiSnake.getBody()) {
             g.fillRect(p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         }
@@ -118,16 +219,16 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
             g.setFont(new Font("Arial", Font.BOLD, 40));
             String gameOverText = "Game Over!";
             FontMetrics metrics = g.getFontMetrics();
-            int x = (getWidth() - metrics.stringWidth(gameOverText)) / 2;
-            int y = getHeight() / 2;
+            int x = (gameArea.getWidth() - metrics.stringWidth(gameOverText)) / 2;
+            int y = gameArea.getHeight() / 2;
             g.drawString(gameOverText, x, y);
         } else if (gamePaused) {
             g.setColor(Color.WHITE);
             g.setFont(new Font("Arial", Font.BOLD, 40));
             String pausedText = "Paused";
             FontMetrics metrics = g.getFontMetrics();
-            int x = (getWidth() - metrics.stringWidth(pausedText)) / 2;
-            int y = getHeight() / 2;
+            int x = (gameArea.getWidth() - metrics.stringWidth(pausedText)) / 2;
+            int y = gameArea.getHeight() / 2;
             g.drawString(pausedText, x, y);
         }
     }
@@ -159,7 +260,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
             
             closedSet.add(pos);
             
-            // Check all four directions
             int[][] directions = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
             for (int[] dir : directions) {
                 Point next = new Point(pos.x + dir[0], pos.y + dir[1]);
@@ -180,7 +280,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
             }
         }
         
-        return new LinkedList<>(); // No path found
+        return new LinkedList<>();
     }
     
     private Queue<Point> reconstructPath(Node end) {
@@ -197,45 +297,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     
     @Override
     public void actionPerformed(ActionEvent e) {
-        if (!gameOver && !gamePaused) {
-            // Update AI snake's path
-            Queue<Point> aiPath = findPathToFood(aiSnake);
-            aiSnake.setPathToFood(aiPath);
-            
-            // Move snakes
-            playerSnake.move();
-            aiSnake.move();
-            
-            // Check collisions
-            Point playerHead = playerSnake.getHead();
-            Point aiHead = aiSnake.getHead();
-            
-            // Wall collisions
-            if (playerHead.x < 0 || playerHead.x >= GRID_WIDTH || 
-                playerHead.y < 0 || playerHead.y >= GRID_HEIGHT) {
-                gameOver = true;
-            }
-            
-            // Snake collisions
-            if (playerSnake.collidesWithSelf() || 
-                aiSnake.collidesWith(playerHead) ||
-                playerSnake.collidesWith(aiHead)) {
-                gameOver = true;
-            }
-            
-            // Food collision
-            if (playerHead.equals(food) || aiHead.equals(food)) {
-                if (playerHead.equals(food)) {
-                    playerSnake.grow();
-                }
-                if (aiHead.equals(food)) {
-                    aiSnake.grow();
-                }
-                spawnFood();
-            }
-            
-            repaint();
-        }
+        // This is now handled by the timer's lambda
     }
     
     @Override
@@ -263,6 +325,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
                     togglePause();
                     break;
             }
+        } else if (e.getKeyCode() == KeyEvent.VK_P) {
+            togglePause();
         }
     }
     
