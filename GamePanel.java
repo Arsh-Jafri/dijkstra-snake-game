@@ -15,12 +15,43 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     private javax.swing.Timer timer;
     private Random random;
     private boolean gameOver;
+    private boolean gamePaused;
+    private JPanel controlPanel;
+    private JButton restartButton;
+    private JButton pauseResumeButton;
     
     public GamePanel() {
-        setPreferredSize(new Dimension(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE));
-        setBackground(Color.BLACK);
-        setFocusable(true);
-        addKeyListener(this);
+        setLayout(new BorderLayout());
+        
+        // Create game area panel
+        JPanel gameArea = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                drawGame(g);
+            }
+        };
+        gameArea.setPreferredSize(new Dimension(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE));
+        gameArea.setBackground(Color.BLACK);
+        gameArea.setFocusable(true);
+        gameArea.addKeyListener(this);
+        
+        // Create control panel
+        controlPanel = new JPanel();
+        controlPanel.setBackground(Color.DARK_GRAY);
+        
+        restartButton = new JButton("Restart");
+        pauseResumeButton = new JButton("Pause");
+        
+        restartButton.addActionListener(e -> restartGame());
+        pauseResumeButton.addActionListener(e -> togglePause());
+        
+        controlPanel.add(restartButton);
+        controlPanel.add(pauseResumeButton);
+        
+        // Add components to panel
+        add(gameArea, BorderLayout.CENTER);
+        add(controlPanel, BorderLayout.SOUTH);
         
         random = new Random();
         initializeGame();
@@ -34,6 +65,71 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         aiSnake = new Snake(GRID_WIDTH - 5, GRID_HEIGHT / 2, true);
         spawnFood();
         gameOver = false;
+        gamePaused = false;
+        pauseResumeButton.setText("Pause");
+        timer.start();
+        requestFocusInWindow();
+    }
+    
+    private void restartGame() {
+        initializeGame();
+        repaint();
+    }
+    
+    private void togglePause() {
+        gamePaused = !gamePaused;
+        if (gamePaused) {
+            timer.stop();
+            pauseResumeButton.setText("Resume");
+        } else {
+            timer.start();
+            pauseResumeButton.setText("Pause");
+        }
+        requestFocusInWindow();
+    }
+    
+    private void drawGame(Graphics g) {
+        // Draw grid (optional)
+        g.setColor(Color.DARK_GRAY);
+        for (int i = 0; i < GRID_WIDTH; i++) {
+            for (int j = 0; j < GRID_HEIGHT; j++) {
+                g.drawRect(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+        }
+        
+        // Draw food
+        g.setColor(Color.RED);
+        g.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        
+        // Draw player snake
+        g.setColor(Color.GREEN);
+        for (Point p : playerSnake.getBody()) {
+            g.fillRect(p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+        
+        // Draw AI snake
+        g.setColor(Color.BLUE);
+        for (Point p : aiSnake.getBody()) {
+            g.fillRect(p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+        
+        if (gameOver) {
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.BOLD, 40));
+            String gameOverText = "Game Over!";
+            FontMetrics metrics = g.getFontMetrics();
+            int x = (getWidth() - metrics.stringWidth(gameOverText)) / 2;
+            int y = getHeight() / 2;
+            g.drawString(gameOverText, x, y);
+        } else if (gamePaused) {
+            g.setColor(Color.WHITE);
+            g.setFont(new Font("Arial", Font.BOLD, 40));
+            String pausedText = "Paused";
+            FontMetrics metrics = g.getFontMetrics();
+            int x = (getWidth() - metrics.stringWidth(pausedText)) / 2;
+            int y = getHeight() / 2;
+            g.drawString(pausedText, x, y);
+        }
     }
     
     private void spawnFood() {
@@ -100,47 +196,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     }
     
     @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        
-        // Draw grid (optional)
-        g.setColor(Color.DARK_GRAY);
-        for (int i = 0; i < GRID_WIDTH; i++) {
-            for (int j = 0; j < GRID_HEIGHT; j++) {
-                g.drawRect(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-            }
-        }
-        
-        // Draw food
-        g.setColor(Color.RED);
-        g.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-        
-        // Draw player snake
-        g.setColor(Color.GREEN);
-        for (Point p : playerSnake.getBody()) {
-            g.fillRect(p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-        }
-        
-        // Draw AI snake
-        g.setColor(Color.BLUE);
-        for (Point p : aiSnake.getBody()) {
-            g.fillRect(p.x * CELL_SIZE, p.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-        }
-        
-        if (gameOver) {
-            g.setColor(Color.WHITE);
-            g.setFont(new Font("Arial", Font.BOLD, 40));
-            String gameOverText = "Game Over!";
-            FontMetrics metrics = g.getFontMetrics();
-            int x = (getWidth() - metrics.stringWidth(gameOverText)) / 2;
-            int y = getHeight() / 2;
-            g.drawString(gameOverText, x, y);
-        }
-    }
-    
-    @Override
     public void actionPerformed(ActionEvent e) {
-        if (!gameOver) {
+        if (!gameOver && !gamePaused) {
             // Update AI snake's path
             Queue<Point> aiPath = findPathToFood(aiSnake);
             aiSnake.setPathToFood(aiPath);
@@ -183,24 +240,29 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     
     @Override
     public void keyPressed(KeyEvent e) {
-        switch (e.getKeyCode()) {
-            case KeyEvent.VK_UP:
-                playerSnake.setDirection(0, -1);
-                break;
-            case KeyEvent.VK_DOWN:
-                playerSnake.setDirection(0, 1);
-                break;
-            case KeyEvent.VK_LEFT:
-                playerSnake.setDirection(-1, 0);
-                break;
-            case KeyEvent.VK_RIGHT:
-                playerSnake.setDirection(1, 0);
-                break;
-            case KeyEvent.VK_SPACE:
-                if (gameOver) {
-                    initializeGame();
-                }
-                break;
+        if (!gamePaused) {
+            switch (e.getKeyCode()) {
+                case KeyEvent.VK_UP:
+                    playerSnake.setDirection(0, -1);
+                    break;
+                case KeyEvent.VK_DOWN:
+                    playerSnake.setDirection(0, 1);
+                    break;
+                case KeyEvent.VK_LEFT:
+                    playerSnake.setDirection(-1, 0);
+                    break;
+                case KeyEvent.VK_RIGHT:
+                    playerSnake.setDirection(1, 0);
+                    break;
+                case KeyEvent.VK_SPACE:
+                    if (gameOver) {
+                        initializeGame();
+                    }
+                    break;
+                case KeyEvent.VK_P:
+                    togglePause();
+                    break;
+            }
         }
     }
     
