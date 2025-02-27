@@ -9,14 +9,18 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     private static final int GRID_HEIGHT = 20;
     private static final int INITIAL_SNAKE_LENGTH = 4;
     private static final int CONTROL_PANEL_HEIGHT = 50;
+    private static final int COUNTDOWN_SECONDS = 3;
     
     private Snake playerSnake;
     private Snake aiSnake;
     private Point food;
     private javax.swing.Timer timer;
+    private javax.swing.Timer countdownTimer;
     private Random random;
     private boolean gameOver;
     private boolean gamePaused;
+    private boolean gameStarted;
+    private int countdownNumber;
     private JPanel controlPanel;
     private JButton restartButton;
     private JButton pauseResumeButton;
@@ -29,6 +33,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             drawGame(g);
+            if (!gameStarted && !gameOver) {
+                drawCountdown(g);
+            }
         }
         
         @Override
@@ -57,6 +64,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         random = new Random();
         gameOver = false;
         gamePaused = false;
+        gameStarted = false;
+        countdownNumber = COUNTDOWN_SECONDS;
         
         // Create game area panel
         gameArea = new GameAreaPanel();
@@ -105,17 +114,51 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         add(wrapperPanel, BorderLayout.CENTER);
         add(controlPanel, BorderLayout.SOUTH);
         
+        // Create game timer
         timer = new javax.swing.Timer(gameSpeed, e -> {
             update();
+            gameArea.repaint();
+        });
+        
+        // Create countdown timer
+        countdownTimer = new javax.swing.Timer(1000, e -> {
+            countdownNumber--;
+            if (countdownNumber <= 0) {
+                countdownTimer.stop();
+                startGameAfterCountdown();
+            }
             gameArea.repaint();
         });
         
         initializeSnakes();
         spawnFood();
         
-        timer.start();
+        // Start countdown instead of starting game immediately
+        startCountdown();
         
         SwingUtilities.invokeLater(() -> gameArea.requestFocusInWindow());
+    }
+    
+    private void startCountdown() {
+        gameStarted = false;
+        countdownNumber = COUNTDOWN_SECONDS;
+        countdownTimer.start();
+        gameArea.repaint();
+    }
+    
+    private void startGameAfterCountdown() {
+        gameStarted = true;
+        timer.start();
+    }
+    
+    private void drawCountdown(Graphics g) {
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 100));
+        String countdownText = String.valueOf(countdownNumber);
+        FontMetrics metrics = g.getFontMetrics();
+        int x = (gameArea.getWidth() - metrics.stringWidth(countdownText)) / 2;
+        int y = (gameArea.getHeight() + metrics.getAscent()) / 2;
+        g.drawString(countdownText, x, y);
     }
     
     private void initializeSnakes() {
@@ -135,10 +178,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         spawnFood();
         gameOver = false;
         gamePaused = false;
+        gameStarted = false;
         pauseResumeButton.setText("Pause");
-        if (!timer.isRunning()) {
-            timer.start();
-        }
+        timer.stop();
+        startCountdown();
         gameArea.requestFocusInWindow();
     }
     
@@ -302,7 +345,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     
     @Override
     public void keyPressed(KeyEvent e) {
-        if (!gamePaused) {
+        if (gameStarted && !gamePaused) {
             switch (e.getKeyCode()) {
                 case KeyEvent.VK_UP:
                     playerSnake.setDirection(0, -1);
@@ -325,7 +368,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
                     togglePause();
                     break;
             }
-        } else if (e.getKeyCode() == KeyEvent.VK_P) {
+        } else if (e.getKeyCode() == KeyEvent.VK_P && gameStarted) {
             togglePause();
         }
     }
