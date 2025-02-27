@@ -27,6 +27,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     private GameAreaPanel gameArea;
     private Color playerColor;
     private Color aiColor;
+    private Color foodColor;
     
     private class GameAreaPanel extends JPanel {
         @Override
@@ -57,6 +58,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     public GamePanel(Color playerColor, Color aiColor, int gameSpeed) {
         this.playerColor = playerColor;
         this.aiColor = aiColor;
+        updateFoodColor();
         
         setLayout(new BorderLayout(0, 10));
         
@@ -244,7 +246,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
             }
         }
         
-        g.setColor(Color.RED);
+        g.setColor(foodColor);
         g.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
         
         g.setColor(playerColor);
@@ -336,6 +338,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         }
         
         return path;
+    }
+    
+    private void updateFoodColor() {
+        // If either snake is red, make food yellow, otherwise keep it red
+        if (playerColor.equals(Color.RED) || aiColor.equals(Color.RED)) {
+            foodColor = Color.YELLOW;
+        } else {
+            foodColor = Color.RED;
+        }
     }
     
     @Override

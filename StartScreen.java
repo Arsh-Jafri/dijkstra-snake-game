@@ -3,11 +3,42 @@ import java.awt.*;
 import java.awt.event.*;
 
 public class StartScreen extends JPanel {
-    private Color selectedPlayerColor = Color.GREEN;
-    private Color selectedAIColor = Color.BLUE;
+    private Color selectedPlayerColor = Color.BLUE;
+    private Color selectedAIColor = Color.RED;
     private int gameSpeed = 100; // Default speed
     private boolean gameStarted = false;
     private Game parentGame;
+    private ColorPreviewPanel playerColorPreview;
+    private ColorPreviewPanel aiColorPreview;
+    
+    private class ColorPreviewPanel extends JPanel {
+        private Color color;
+        private String label;
+        
+        public ColorPreviewPanel(Color initialColor, String label) {
+            this.color = initialColor;
+            this.label = label;
+            setPreferredSize(new Dimension(80, 30));
+            setBackground(Color.BLACK);
+            setBorder(BorderFactory.createLineBorder(Color.WHITE));
+        }
+        
+        public void setPreviewColor(Color newColor) {
+            this.color = newColor;
+            repaint();
+        }
+        
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            // Draw the color preview
+            g.setColor(color);
+            g.fillRect(5, 5, getWidth() - 10, getHeight() - 10);
+            // Draw border
+            g.setColor(Color.WHITE);
+            g.drawRect(5, 5, getWidth() - 10, getHeight() - 10);
+        }
+    }
     
     public StartScreen(Game parent) {
         this.parentGame = parent;
@@ -28,10 +59,11 @@ public class StartScreen extends JPanel {
         settingsPanel.setBorder(BorderFactory.createEmptyBorder(20, 50, 20, 50));
         
         // Player color selection
-        JPanel playerColorPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        JPanel playerColorPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
         playerColorPanel.setBackground(Color.BLACK);
-        JLabel playerColorLabel = new JLabel("Player Snake Color: ");
+        JLabel playerColorLabel = new JLabel("Player Snake Color:");
         playerColorLabel.setForeground(Color.WHITE);
+        playerColorPreview = new ColorPreviewPanel(selectedPlayerColor, "Player");
         JButton playerColorButton = new JButton("Choose Color");
         playerColorButton.setBackground(selectedPlayerColor);
         playerColorButton.addActionListener(e -> {
@@ -39,16 +71,19 @@ public class StartScreen extends JPanel {
             if (newColor != null) {
                 selectedPlayerColor = newColor;
                 playerColorButton.setBackground(newColor);
+                playerColorPreview.setPreviewColor(newColor);
             }
         });
         playerColorPanel.add(playerColorLabel);
         playerColorPanel.add(playerColorButton);
+        playerColorPanel.add(playerColorPreview);
         
         // AI color selection
-        JPanel aiColorPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        JPanel aiColorPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
         aiColorPanel.setBackground(Color.BLACK);
-        JLabel aiColorLabel = new JLabel("AI Snake Color: ");
+        JLabel aiColorLabel = new JLabel("AI Snake Color:");
         aiColorLabel.setForeground(Color.WHITE);
+        aiColorPreview = new ColorPreviewPanel(selectedAIColor, "AI");
         JButton aiColorButton = new JButton("Choose Color");
         aiColorButton.setBackground(selectedAIColor);
         aiColorButton.addActionListener(e -> {
@@ -56,10 +91,12 @@ public class StartScreen extends JPanel {
             if (newColor != null) {
                 selectedAIColor = newColor;
                 aiColorButton.setBackground(newColor);
+                aiColorPreview.setPreviewColor(newColor);
             }
         });
         aiColorPanel.add(aiColorLabel);
         aiColorPanel.add(aiColorButton);
+        aiColorPanel.add(aiColorPreview);
         
         // Speed control
         JPanel speedPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
